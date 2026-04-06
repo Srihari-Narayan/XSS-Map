@@ -22,7 +22,7 @@ CATEGORIES = [
     "other",                # Anything that doesn't fit above
 ]
 
-BATCH_SIZE = 30  # payloads per Ollama call
+BATCH_SIZE = 10  # payloads per Ollama call
 
 SYSTEM_PROMPT = f"""You are a cybersecurity payload classifier. Given a list of XSS payloads, classify each one into exactly ONE of these categories:
 
@@ -49,7 +49,7 @@ def _call_ollama(payloads_batch, model, ollama_url):
     ]
 
     try:
-        content = call_ollama_chat(ollama_url, model, messages, timeout=120)
+        content = call_ollama_chat(ollama_url, model, messages, timeout=300)
         # Extract JSON array from response (model may wrap it in markdown)
         if "```" in content:
             content = content.split("```")[1]

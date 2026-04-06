@@ -8,13 +8,24 @@ from xss_map.tagger import CATEGORIES
 RESULT_LABELS = ["reflected", "filtered", "blocked", "not_reflected"]
 
 STRATEGY_SYSTEM = """You are a cybersecurity expert advising an adaptive XSS scanner.
+Your job: given test results so far, pick the NEXT payload category to maximize XSS discovery.
 
-Given a summary of results from testing payload categories against a target, recommend which category to try NEXT.
-
-Available categories:
+Available categories (pick EXACTLY one):
 """ + "\n".join(f"- {cat}" for cat in CATEGORIES) + """
 
-Respond with ONLY a JSON object: {"next_category": "<category>", "reasoning": "<1 sentence>"}
+Rules:
+1. Favor categories with high reflected/total ratio — they indicate weak filtering.
+2. Avoid categories with high blocked rate — the WAF catches those.
+3. If "filtered" is high for a category, a related category with encoding or different tags may bypass the filter.
+4. Prefer untested or under-tested categories over exhausted ones.
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+Example response:
+{"next_category": "event_handler", "reasoning": "script_tag is blocked but event handlers are less filtered"}
+
+Another example:
+{"next_category": "encoded", "reasoning": "svg_tag payloads are filtered, encoded variants may bypass"}
 """
 
 

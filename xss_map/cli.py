@@ -31,6 +31,8 @@ def main():
     scan_parser = subparsers.add_parser(
         "scan",
         help="Run adaptive XSS scan against a target URL",
+        epilog="Recommended Ollama models: llama3:8b (best default), mistral:7b, gemma2:9b. "
+               "Pull with: ollama pull llama3:8b",
     )
     scan_parser.add_argument(
         "url",
@@ -55,8 +57,10 @@ def main():
     )
     scan_parser.add_argument(
         "--model",
-        default="llama3",
-        help="Ollama model for response analysis (default: llama3)",
+        default="llama3:8b",
+        help="Ollama model for AI strategy (default: llama3:8b). "
+             "Recommended: llama3:8b, mistral:7b, gemma2:9b. "
+             "Avoid models < 7B params (e.g. phi3:mini) — too weak for structured output.",
     )
     scan_parser.add_argument(
         "--ollama-url",

@@ -125,6 +125,7 @@ def scan(args):
 
     if provider == "anthropic" and not api_key:
         error("Anthropic provider requires --api-key or ANTHROPIC_API_KEY env var.")
+        info("Tip: Run 'claude setup-token' to get your OAuth token, then pass it with --api-key")
         return
 
     info(f"AI provider: {provider} (model: {model})")

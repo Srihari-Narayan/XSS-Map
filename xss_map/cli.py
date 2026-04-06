@@ -70,7 +70,9 @@ def main():
     scan_parser.add_argument(
         "--api-key",
         default=None,
-        help="Anthropic API key or OAuth token. Also reads ANTHROPIC_API_KEY env var.",
+        help="Anthropic API key or OAuth token (sk-ant-oat01-...). "
+             "Run 'claude setup-token' to get your OAuth token. "
+             "Also reads ANTHROPIC_API_KEY env var.",
     )
     scan_parser.add_argument(
         "--ollama-url",

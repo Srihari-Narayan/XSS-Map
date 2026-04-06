@@ -1,74 +1,84 @@
-"""Offline payload tagger — categorizes payloads via Ollama and saves to JSON."""
+"""Payload tagger — categorizes payloads using regex pattern matching."""
 
 import json
 import os
-import requests as req
-from xss_map.utils import info, success, warning, error, call_ollama_chat
+import re
+from xss_map.utils import info, success, error
 
-# Payload categories the model should choose from
 CATEGORIES = [
-    "script_tag",           # <script>...</script>
-    "event_handler",        # onerror, onload, onfocus, onclick, etc.
-    "encoded",              # URL-encoded, hex-encoded, double-encoded, base64
-    "svg_tag",              # <svg onload=...>
-    "img_tag",              # <img src=x onerror=...>
-    "iframe_tag",           # <iframe src=javascript:...>
-    "javascript_uri",       # javascript:alert(1)
-    "style_injection",      # expression(), background-image:url(js:...)
-    "template_injection",   # {{constructor...}}, AngularJS sandbox escapes
-    "polyglot",             # Multi-context payloads
-    "dom_manipulation",     # document.cookie, document.domain, sessionStorage
-    "tag_breakout",         # ">..., '>, closing tags to escape context
-    "other",                # Anything that doesn't fit above
+    "script_tag",
+    "event_handler",
+    "encoded",
+    "svg_tag",
+    "img_tag",
+    "iframe_tag",
+    "javascript_uri",
+    "style_injection",
+    "template_injection",
+    "polyglot",
+    "dom_manipulation",
+    "tag_breakout",
+    "other",
 ]
 
-BATCH_SIZE = 10  # payloads per Ollama call
+# Order matters — first match wins, so more specific patterns go first
+_RULES = [
+    # Template injection (Angular, Moustache, etc.)
+    (re.compile(r"\{\{.*\}\}", re.I), "template_injection"),
 
-SYSTEM_PROMPT = f"""You are a cybersecurity payload classifier. Given a list of XSS payloads, classify each one into exactly ONE of these categories:
+    # Polyglots — long multi-vector payloads hitting several contexts at once
+    (re.compile(
+        r"(?=.*<)(?=.*on\w+=)(?=.*(?:javascript:|alert|confirm|prompt))",
+        re.I | re.S,
+    ), "polyglot"),
 
-{chr(10).join(f"- {c}" for c in CATEGORIES)}
+    # SVG tags
+    (re.compile(r"<\s*/?svg[\s/>]", re.I), "svg_tag"),
 
-Rules:
-- If a payload fits multiple categories, choose the MOST SPECIFIC one (e.g. an <img> with onerror is "img_tag", not "event_handler").
-- "polyglot" is for payloads that intentionally target multiple contexts.
-- "encoded" is for payloads where the primary evasion technique is encoding.
-- "tag_breakout" is for payloads whose primary purpose is escaping an HTML attribute/tag context.
+    # IMG tags
+    (re.compile(r"<\s*img[\s/>]", re.I), "img_tag"),
 
-Respond with ONLY a JSON array of category strings, one per payload, in the same order.
-Example input: ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>"]
-Example output: ["script_tag", "img_tag"]
-"""
+    # Iframe tags
+    (re.compile(r"<\s*iframe[\s/>]", re.I), "iframe_tag"),
 
+    # Script tags
+    (re.compile(r"<\s*/?script[\s/>]", re.I), "script_tag"),
 
-def _call_ollama(payloads_batch, model, ollama_url):
-    """Send a batch of payloads to Ollama for classification."""
-    prompt = json.dumps(payloads_batch)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": prompt},
-    ]
+    # Style injection — expression(), background url(javascript:), etc.
+    (re.compile(r"(expression\s*\(|style\s*=|background[:\-].*url\s*\()", re.I), "style_injection"),
 
-    try:
-        content = call_ollama_chat(ollama_url, model, messages, timeout=300)
-        # Extract JSON array from response (model may wrap it in markdown)
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-            content = content.strip()
-        categories = json.loads(content)
-        # Validate
-        validated = []
-        for cat in categories:
-            validated.append(cat if cat in CATEGORIES else "other")
-        return validated
-    except (req.RequestException, json.JSONDecodeError, KeyError, IndexError) as e:
-        error(f"Ollama call failed: {e}")
-        return None
+    # javascript: URI scheme
+    (re.compile(r"javascript\s*:", re.I), "javascript_uri"),
+
+    # Heavily encoded payloads (>40% are %XX or &#xNN sequences)
+    (re.compile(r"(?:%[0-9a-fA-F]{2}.*){5}"), "encoded"),
+    (re.compile(r"(?:&#x?[0-9a-fA-F]+;.*){3}", re.I), "encoded"),
+
+    # Event handlers (onerror, onload, onfocus, onclick, etc.)
+    (re.compile(r"on[a-z]{3,}[\s]*=", re.I), "event_handler"),
+
+    # DOM manipulation keywords
+    (re.compile(
+        r"(document\s*[\.\[]|window\s*[\.\[]|sessionStorage|localStorage|\.cookie|\.domain)",
+        re.I,
+    ), "dom_manipulation"),
+
+    # Tag breakout — starts with ", '>, "> or closes a tag to escape context
+    (re.compile(r"""^[\s]*['">\-/\\]*\s*[<>]"""), "tag_breakout"),
+    (re.compile(r"</\s*\w+\s*>"), "tag_breakout"),
+]
 
 
-def tag_payloads(payloads_file, output_file, model, ollama_url):
-    """Read payloads from file, classify via Ollama in batches, write tagged JSON."""
+def _classify_payload(payload):
+    """Classify a single payload using regex rules."""
+    for pattern, category in _RULES:
+        if pattern.search(payload):
+            return category
+    return "other"
+
+
+def tag_payloads(payloads_file, output_file, **_kwargs):
+    """Read payloads from file, classify with regex rules, write tagged JSON."""
     if not os.path.isfile(payloads_file):
         error(f"Payloads file not found: {payloads_file}")
         return False
@@ -77,35 +87,20 @@ def tag_payloads(payloads_file, output_file, model, ollama_url):
         payloads = [line.strip() for line in f if line.strip()]
 
     info(f"Loaded {len(payloads)} payloads from {payloads_file}")
-    info(f"Classifying in batches of {BATCH_SIZE} using model '{model}'...")
+    info("Classifying with pattern matching...")
 
     tagged = []
-    total_batches = (len(payloads) + BATCH_SIZE - 1) // BATCH_SIZE
+    for payload in payloads:
+        tagged.append({"payload": payload, "category": _classify_payload(payload)})
 
-    for i in range(0, len(payloads), BATCH_SIZE):
-        batch_num = i // BATCH_SIZE + 1
-        batch = payloads[i : i + BATCH_SIZE]
-        info(f"  Batch {batch_num}/{total_batches} ({len(batch)} payloads)...")
-
-        categories = _call_ollama(batch, model, ollama_url)
-
-        if categories is None or len(categories) != len(batch):
-            warning(f"  Batch {batch_num} returned invalid results — tagging as 'other'")
-            categories = ["other"] * len(batch)
-
-        for payload, category in zip(batch, categories):
-            tagged.append({"payload": payload, "category": category})
-
-    # Write output
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(tagged, f, indent=2, ensure_ascii=False)
 
-    # Summary
     cat_counts = {}
     for entry in tagged:
         cat_counts[entry["category"]] = cat_counts.get(entry["category"], 0) + 1
 
-    success(f"Tagged {len(tagged)} payloads → {output_file}")
+    success(f"Tagged {len(tagged)} payloads -> {output_file}")
     info("Category distribution:")
     for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
         print(f"    {cat:25s} {count}")

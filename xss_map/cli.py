@@ -14,7 +14,7 @@ def main():
     # ── tag subcommand ───────────────────────────────────────────────────
     tag_parser = subparsers.add_parser(
         "tag",
-        help="Classify payloads file into categories using Ollama (one-time setup)",
+        help="Classify payloads file into categories (instant, no Ollama needed)",
     )
     tag_parser.add_argument(
         "-f", "--file",
@@ -25,16 +25,6 @@ def main():
         "-o", "--output",
         default="payloads_tagged.json",
         help="Output path for tagged JSON (default: payloads_tagged.json)",
-    )
-    tag_parser.add_argument(
-        "--model",
-        default="llama3",
-        help="Ollama model to use for classification (default: llama3)",
-    )
-    tag_parser.add_argument(
-        "--ollama-url",
-        default="http://localhost:11434",
-        help="Ollama API base URL (default: http://localhost:11434)",
     )
 
     # ── scan subcommand ──────────────────────────────────────────────────
@@ -137,7 +127,7 @@ def main():
         from xss_map.tagger import tag_payloads
         from xss_map.utils import banner
         banner()
-        ok = tag_payloads(args.file, args.output, args.model, args.ollama_url)
+        ok = tag_payloads(args.file, args.output)
         sys.exit(0 if ok else 1)
 
     elif args.command == "scan":

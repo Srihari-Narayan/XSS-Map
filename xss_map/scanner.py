@@ -5,8 +5,8 @@ import os
 import random
 import requests as req
 from xss_map.analyzer import Analyzer
-from xss_map.crawler import crawl, display_injection_points
-from xss_map.injector import inject, InjectionResult
+from xss_map.crawler import crawl, display_injection_points, InjectionPoint
+from xss_map.injector import inject
 from xss_map.reporter import Reporter
 from xss_map.utils import (
     RateLimiter,
@@ -23,7 +23,7 @@ from xss_map.utils import (
 
 
 def _load_tagged_payloads(path):
-    """Load tagged payloads JSON. Returns dict: category → [payload_str, ...]."""
+    """Load tagged payloads JSON. Returns dict: category -> [payload_str, ...]."""
     with open(path, "r", encoding="utf-8") as f:
         entries = json.load(f)
     by_category = {}
@@ -56,7 +56,6 @@ def _pick_payloads(payloads_by_cat, category, max_payloads):
     if category in payloads_by_cat and payloads_by_cat[category]:
         pool = payloads_by_cat[category]
     else:
-        # Flatten all
         pool = [p for plist in payloads_by_cat.values() for p in plist]
 
     if len(pool) <= max_payloads:
@@ -93,8 +92,6 @@ def scan(args):
 
     # ── Discover injection points ────────────────────────────────────────
     if args.param:
-        # User-specified params — treat as GET query params by default
-        from xss_map.crawler import InjectionPoint
         points = []
         for p in args.param:
             points.append(InjectionPoint(
@@ -113,17 +110,14 @@ def scan(args):
     display_injection_points(points)
 
     # ── Let user select which injection points to test ───────────────────
-    labels = [str(p) for p in points]
-    selected_indices = prompt_select("Select injection points to test:", labels)
+    selected_indices = prompt_select("Select injection points to test:", [str(p) for p in points], already_displayed=True)
     if not selected_indices:
         info("No injection points selected. Aborting.")
         return
     points = [points[i] for i in selected_indices]
 
-    # ── Initialize analyzer ──────────────────────────────────────────────
+    # ── Initialize analyzer & reporter ───────────────────────────────────
     analyzer = Analyzer(model=args.model, ollama_url=args.ollama_url)
-
-    # ── Initialize reporter ──────────────────────────────────────────────
     reporter = Reporter(target_url=args.url)
 
     # ── Scan each injection point ────────────────────────────────────────
@@ -132,89 +126,85 @@ def scan(args):
     max_rounds = args.max_rounds
 
     for ip_idx, ip in enumerate(points):
-        info(f"\n{'─' * 55}")
+        info(f"\n{'=' * 55}")
         info(f"Testing injection point {ip_idx + 1}/{len(points)}: {ip}")
-        info(f"{'─' * 55}")
+        info(f"{'=' * 55}")
 
-        current_category = None  # let analyzer decide after first round
         tested_payloads = set()
         xss_found_for_point = False
+        focused_categories = set()
+        stop_point = False
 
         for round_num in range(1, max_rounds + 1):
-            # Pick payloads
-            if current_category:
-                info(f"Round {round_num}: AI suggests category '{current_category}'")
-                batch = _pick_payloads(payloads_by_cat, current_category, payloads_per_round)
-            else:
-                # First round: sample across categories
-                info(f"Round {round_num}: Initial broad sampling")
+            # ── Pick category ────────────────────────────────────────
+            if round_num == 1:
+                # First round: sample broadly across all categories
+                info(f"Round {round_num}: Broad sampling across categories")
                 batch = _pick_payloads(payloads_by_cat, "__all__", payloads_per_round)
+                current_category = "mixed"
+            else:
+                # Ask Ollama for strategy (ONE call per round)
+                info(f"Round {round_num}: Asking AI for next strategy...")
+                suggested = analyzer.suggest_next_category(focused_categories)
+                if not suggested:
+                    # Fallback: use heuristic
+                    suggested = analyzer.get_best_category_heuristic()
+                if suggested:
+                    current_category = suggested
+                    focused_categories.add(current_category)
+                    info(f"Round {round_num}: Focusing on '{current_category}'")
+                    batch = _pick_payloads(payloads_by_cat, current_category, payloads_per_round)
+                else:
+                    info(f"Round {round_num}: No clear suggestion, sampling broadly")
+                    batch = _pick_payloads(payloads_by_cat, "__all__", payloads_per_round)
+                    current_category = "mixed"
 
             # Filter already-tested
             batch = [p for p in batch if p not in tested_payloads]
             if not batch:
-                warning("No untested payloads left for this category. Moving on.")
+                warning("No untested payloads left for this strategy. Moving on.")
                 break
+
+            # ── Fire batch (all heuristic, fast) ─────────────────────
+            round_reflected = 0
+            round_total = 0
 
             for payload in batch:
                 tested_payloads.add(payload)
-                display_payload = truncate(payload, 60)
+                display_payload = truncate(payload, 70)
+                round_total += 1
 
                 result = inject(session, ip, payload, rate_limiter)
                 if result is None:
-                    warning(f"  Request failed for: {display_payload}")
+                    warning(f"  Request failed: {display_payload}")
                     continue
 
-                # Classify with AI
-                ai_result = analyzer.classify(
-                    payload=payload,
-                    category=current_category or "mixed",
-                    response_snippet=result.snippet,
-                    status_code=result.status_code,
+                label = analyzer.classify(
+                    payload, result.response_body, result.status_code,
+                    category=current_category,
                 )
 
-                if ai_result:
-                    label = ai_result["result"]
-                    next_cat = ai_result["next_category"]
-                    reasoning = ai_result.get("reasoning", "")
-
-                    if label == "reflected":
-                        success(f"  REFLECTED  → {display_payload}")
-                        confirmed_xss.append(result)
-                        reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
-                        xss_found_for_point = True
-                    elif label == "executed":
-                        critical(f"  EXECUTED   → {display_payload}")
-                        confirmed_xss.append(result)
-                        reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
-                        xss_found_for_point = True
-                    elif label == "filtered":
-                        warning(f"  FILTERED   → {display_payload}")
-                        reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
-                    elif label == "blocked":
-                        error(f"  BLOCKED    → {display_payload}")
-                    else:
-                        info(f"  {label:10s}  → {display_payload}")
-
-                    current_category = next_cat
+                if label == "reflected":
+                    success(f"  REFLECTED  {display_payload}")
+                    confirmed_xss.append(result)
+                    reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
+                    xss_found_for_point = True
+                    round_reflected += 1
+                elif label == "filtered":
+                    warning(f"  FILTERED   {display_payload}")
+                    reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
+                elif label == "blocked":
+                    error(f"  BLOCKED    {display_payload}")
                 else:
-                    # Fallback heuristic
-                    label = analyzer.quick_classify(payload, result.response_body, result.status_code)
-                    if label == "reflected":
-                        success(f"  REFLECTED  → {display_payload} (heuristic)")
-                        confirmed_xss.append(result)
-                        reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
-                        xss_found_for_point = True
-                    else:
-                        info(f"  {label:10s}  → {display_payload} (heuristic)")
+                    pass  # not_reflected — silent to reduce noise
 
-                # If XSS found, ask user
-                if xss_found_for_point and not args.batch:
-                    if not prompt_yn("XSS confirmed! Continue testing this injection point?", default=False):
-                        break
+            # ── Round summary ────────────────────────────────────────
+            info(f"  Round {round_num} done: {round_reflected}/{round_total} reflected")
 
+            # ── Ask user after round if XSS found ────────────────────
             if xss_found_for_point and not args.batch:
-                if not prompt_yn("Continue testing this injection point with more rounds?", default=False):
+                if not prompt_yn("XSS found! Continue testing this injection point?", default=False):
+                    stop_point = True
                     break
 
         # After finishing an injection point, ask about next
@@ -225,12 +215,12 @@ def scan(args):
 
     # ── Summary ──────────────────────────────────────────────────────────
     print()
-    info(f"{'═' * 55}")
+    info(f"{'=' * 55}")
     if confirmed_xss:
         critical(f"Found {len(confirmed_xss)} confirmed XSS reflection(s)!")
     else:
         info("No confirmed XSS reflections found.")
-    info(f"{'═' * 55}")
+    info(f"{'=' * 55}")
 
     # ── Generate reports ─────────────────────────────────────────────────
     if reporter.findings:

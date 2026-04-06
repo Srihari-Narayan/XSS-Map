@@ -141,5 +141,5 @@ def display_injection_points(points):
         method_color = "\033[92m" if p.method == "GET" else "\033[93m"
         print(
             f"    [{i}] {method_color}{p.method}\033[0m  "
-            f"{p.param_type}:{p.param_name}  →  {p.form_action or p.url}"
+            f"{p.param_type}:{p.param_name}  ->  {p.form_action or p.url}"
         )

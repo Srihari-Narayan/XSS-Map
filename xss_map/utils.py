@@ -78,10 +78,11 @@ def prompt_choice(question, choices, default=None):
     return default or choices[0]
 
 
-def prompt_select(question, items, allow_all=True):
+def prompt_select(question, items, allow_all=True, already_displayed=False):
     """Select from numbered list. Returns list of selected indices (0-based)."""
-    for i, item in enumerate(items, 1):
-        print(f"    {Fore.CYAN}[{i}]{Style.RESET_ALL} {item}")
+    if not already_displayed:
+        for i, item in enumerate(items, 1):
+            print(f"    {Fore.CYAN}[{i}]{Style.RESET_ALL} {item}")
     hint = "All/1,2,3" if allow_all else "1,2,3"
     try:
         answer = input(f"{Fore.BLUE}[?]{Style.RESET_ALL} {question} [{hint}]: ").strip()

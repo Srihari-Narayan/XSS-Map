@@ -116,8 +116,24 @@ def scan(args):
         return
     points = [points[i] for i in selected_indices]
 
+    # ── Resolve provider, model, and API key ────────────────────────────
+    provider = args.provider
+    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
+    model = args.model
+    if not model:
+        model = "claude-haiku-4-5-20251001" if provider == "anthropic" else "llama3:8b"
+
+    if provider == "anthropic" and not api_key:
+        error("Anthropic provider requires --api-key or ANTHROPIC_API_KEY env var.")
+        return
+
+    info(f"AI provider: {provider} (model: {model})")
+
     # ── Initialize analyzer & reporter ───────────────────────────────────
-    analyzer = Analyzer(model=args.model, ollama_url=args.ollama_url)
+    analyzer = Analyzer(
+        model=model, ollama_url=args.ollama_url,
+        provider=provider, api_key=api_key,
+    )
     reporter = Reporter(target_url=args.url)
 
     # ── Scan each injection point ────────────────────────────────────────

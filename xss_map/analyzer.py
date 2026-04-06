@@ -2,7 +2,7 @@
 
 import json
 import requests as req
-from xss_map.utils import info, warning, call_ollama_chat
+from xss_map.utils import info, warning, call_ollama_chat, call_anthropic_chat
 from xss_map.tagger import CATEGORIES
 
 RESULT_LABELS = ["reflected", "filtered", "blocked", "not_reflected"]
@@ -30,11 +30,13 @@ Another example:
 
 
 class Analyzer:
-    """Heuristic response classification + Ollama for round-level strategy."""
+    """Heuristic response classification + LLM for round-level strategy."""
 
-    def __init__(self, model, ollama_url):
+    def __init__(self, model, ollama_url, provider="ollama", api_key=None):
         self.model = model
         self.ollama_url = ollama_url
+        self.provider = provider
+        self.api_key = api_key
         self.history = []  # list of {payload, category, result}
 
     def classify(self, payload, response_body, status_code, category="unknown"):
@@ -105,7 +107,14 @@ Which category should we focus on next to maximize our chances of finding XSS? P
         ]
 
         try:
-            content = call_ollama_chat(self.ollama_url, self.model, messages, timeout=120)
+            if self.provider == "anthropic":
+                content = call_anthropic_chat(
+                    self.api_key, self.model, messages, timeout=120,
+                )
+            else:
+                content = call_ollama_chat(
+                    self.ollama_url, self.model, messages, timeout=120,
+                )
 
             if "```" in content:
                 content = content.split("```")[1]

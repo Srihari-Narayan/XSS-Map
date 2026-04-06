@@ -188,3 +188,53 @@ def call_ollama_chat(ollama_url, model, messages, timeout=120):
             continue
 
     return "".join(content_parts).strip()
+
+
+# ── Anthropic HTTP helper ───────────────────────────────────────────────────
+
+def call_anthropic_chat(api_key, model, messages, timeout=120):
+    """
+    Call the Anthropic Messages API and return the response text.
+    Supports both API keys (x-api-key) and OAuth tokens (Bearer).
+    """
+    # Separate system message from user/assistant messages
+    system_text = ""
+    chat_messages = []
+    for m in messages:
+        if m["role"] == "system":
+            system_text = m["content"]
+        else:
+            chat_messages.append(m)
+
+    body = {
+        "model": model,
+        "max_tokens": 256,
+        "messages": chat_messages,
+    }
+    if system_text:
+        body["system"] = system_text
+
+    headers = {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+    }
+
+    # OAuth tokens start with sk-ant-oat, API keys with sk-ant-api
+    if api_key.startswith("sk-ant-oat"):
+        headers["Authorization"] = f"Bearer {api_key}"
+    else:
+        headers["x-api-key"] = api_key
+
+    resp = req.post(
+        "https://api.anthropic.com/v1/messages",
+        json=body, headers=headers, timeout=timeout,
+    )
+    resp.raise_for_status()
+
+    data = resp.json()
+    # Extract text from content blocks
+    parts = []
+    for block in data.get("content", []):
+        if block.get("type") == "text":
+            parts.append(block["text"])
+    return "".join(parts).strip()

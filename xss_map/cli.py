@@ -56,11 +56,21 @@ def main():
         help="Path to tagged payloads JSON (default: payloads_tagged.json)",
     )
     scan_parser.add_argument(
+        "--provider",
+        choices=["ollama", "anthropic"],
+        default="ollama",
+        help="LLM provider for AI strategy (default: ollama)",
+    )
+    scan_parser.add_argument(
         "--model",
-        default="llama3:8b",
-        help="Ollama model for AI strategy (default: llama3:8b). "
-             "Recommended: llama3:8b, mistral:7b, gemma2:9b. "
-             "Avoid models < 7B params (e.g. phi3:mini) — too weak for structured output.",
+        default=None,
+        help="Model name (default: llama3:8b for ollama, claude-haiku-4-5-20251001 for anthropic). "
+             "Ollama recommended: llama3:8b, mistral:7b, gemma2:9b.",
+    )
+    scan_parser.add_argument(
+        "--api-key",
+        default=None,
+        help="Anthropic API key or OAuth token. Also reads ANTHROPIC_API_KEY env var.",
     )
     scan_parser.add_argument(
         "--ollama-url",

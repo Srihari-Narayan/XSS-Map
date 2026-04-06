@@ -2,7 +2,7 @@
 
 import json
 import requests as req
-from xss_map.utils import info, warning, error
+from xss_map.utils import info, warning, error, call_ollama_chat
 from xss_map.tagger import CATEGORIES
 
 # Classification labels for server responses
@@ -64,20 +64,13 @@ Response snippet around injection point:
 
 Classify this result and recommend the next payload category to try."""
 
-        body = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": CLASSIFY_SYSTEM},
-                {"role": "user", "content": user_prompt},
-            ],
-            "stream": False,
-            "options": {"temperature": 0.1},
-        }
+        messages = [
+            {"role": "system", "content": CLASSIFY_SYSTEM},
+            {"role": "user", "content": user_prompt},
+        ]
 
         try:
-            resp = req.post(f"{self.ollama_url}/api/chat", json=body, timeout=60)
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"].strip()
+            content = call_ollama_chat(self.ollama_url, self.model, messages, timeout=60)
 
             # Parse JSON from response
             if "```" in content:

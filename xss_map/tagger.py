@@ -3,7 +3,7 @@
 import json
 import os
 import requests as req
-from xss_map.utils import info, success, warning, error
+from xss_map.utils import info, success, warning, error, call_ollama_chat
 
 # Payload categories the model should choose from
 CATEGORIES = [
@@ -43,19 +43,13 @@ Example output: ["script_tag", "img_tag"]
 def _call_ollama(payloads_batch, model, ollama_url):
     """Send a batch of payloads to Ollama for classification."""
     prompt = json.dumps(payloads_batch)
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        "stream": False,
-        "options": {"temperature": 0.1},
-    }
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
     try:
-        resp = req.post(f"{ollama_url}/api/chat", json=body, timeout=120)
-        resp.raise_for_status()
-        content = resp.json()["message"]["content"].strip()
+        content = call_ollama_chat(ollama_url, model, messages, timeout=120)
         # Extract JSON array from response (model may wrap it in markdown)
         if "```" in content:
             content = content.split("```")[1]

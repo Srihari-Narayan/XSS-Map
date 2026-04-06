@@ -1,8 +1,10 @@
 """Utility helpers: rate limiting, terminal colors, interactive prompts."""
 
+import json
 import time
 import sys
 import threading
+import requests as req
 from colorama import Fore, Style, init as colorama_init
 
 colorama_init(autoreset=True)
@@ -144,3 +146,44 @@ def truncate(text, max_len=80):
     if len(text) <= max_len:
         return text
     return text[: max_len - 3] + "..."
+
+
+# ── Ollama HTTP helper ───────────────────────────────────────────────────────
+
+def call_ollama_chat(ollama_url, model, messages, timeout=120):
+    """
+    Call Ollama's /api/chat endpoint and return the full response text.
+    Handles both streaming and non-streaming responses.
+    """
+    body = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": 0.1},
+    }
+
+    resp = req.post(f"{ollama_url}/api/chat", json=body, timeout=timeout)
+    resp.raise_for_status()
+
+    # Try parsing as a single JSON object (non-streaming)
+    try:
+        data = resp.json()
+        return data["message"]["content"].strip()
+    except (json.JSONDecodeError, KeyError):
+        pass
+
+    # If that fails, it's a streaming response — concatenate all content chunks
+    content_parts = []
+    for line in resp.text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            chunk = json.loads(line)
+            part = chunk.get("message", {}).get("content", "")
+            if part:
+                content_parts.append(part)
+        except json.JSONDecodeError:
+            continue
+
+    return "".join(content_parts).strip()

@@ -116,23 +116,31 @@ def scan(args):
         return
     points = [points[i] for i in selected_indices]
 
-    # ── Resolve provider, model, and API key ────────────────────────────
-    provider = args.provider
-    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
+    # ── Resolve provider, model, and API key (CLI > env > config) ───────
+    from xss_map.config import load_config
+    config = load_config()
+
+    provider = args.provider or config.get("provider", "ollama")
+    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY") or config.get("anthropic_api_key")
+    ollama_url = args.ollama_url or config.get("ollama_url", "http://localhost:11434")
+
     model = args.model
     if not model:
-        model = "claude-haiku-4-5-20251001" if provider == "anthropic" else "llama3:8b"
+        if provider == "anthropic":
+            model = config.get("anthropic_model", "claude-haiku-4-5-20251001")
+        else:
+            model = config.get("ollama_model", "llama3:8b")
 
     if provider == "anthropic" and not api_key:
-        error("Anthropic provider requires --api-key or ANTHROPIC_API_KEY env var.")
-        info("Tip: Run 'claude setup-token' to get your OAuth token, then pass it with --api-key")
+        error("Anthropic provider requires an API key or OAuth token.")
+        info("Tip: Run 'xss-map setup' to configure, or pass --api-key")
         return
 
     info(f"AI provider: {provider} (model: {model})")
 
     # ── Initialize analyzer & reporter ───────────────────────────────────
     analyzer = Analyzer(
-        model=model, ollama_url=args.ollama_url,
+        model=model, ollama_url=ollama_url,
         provider=provider, api_key=api_key,
     )
     reporter = Reporter(target_url=args.url)

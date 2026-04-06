@@ -132,6 +132,12 @@ def main():
         help="Directory for report files (default: reports/)",
     )
 
+    # ── setup subcommand ──────────────────────────────────────────────────
+    subparsers.add_parser(
+        "setup",
+        help="Configure API keys and default provider for xss-map",
+    )
+
     # ── Parse and dispatch ───────────────────────────────────────────────
     args = parser.parse_args()
 
@@ -145,6 +151,10 @@ def main():
         banner()
         ok = tag_payloads(args.file, args.output)
         sys.exit(0 if ok else 1)
+
+    elif args.command == "setup":
+        from xss_map.config import run_setup
+        run_setup()
 
     elif args.command == "scan":
         from xss_map.scanner import scan

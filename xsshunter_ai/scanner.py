@@ -132,7 +132,7 @@ def scan(args):
             model = config.get("ollama_model", "llama3:8b")
 
     if provider == "anthropic" and not api_key:
-        error("Anthropic provider requires an API key or OAuth token.")
+        error("Anthropic provider requires an API key.")
         info("Tip: Run 'xsshunter setup' to configure, or pass --api-key")
         return
 

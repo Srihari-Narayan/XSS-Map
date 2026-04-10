@@ -195,7 +195,7 @@ def call_ollama_chat(ollama_url, model, messages, timeout=120):
 def call_anthropic_chat(api_key, model, messages, timeout=120):
     """
     Call the Anthropic Messages API and return the response text.
-    Supports both API keys (x-api-key) and OAuth tokens (Bearer).
+    Uses API key authentication (x-api-key header).
     """
     # Separate system message from user/assistant messages
     system_text = ""
@@ -217,13 +217,8 @@ def call_anthropic_chat(api_key, model, messages, timeout=120):
     headers = {
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01",
+        "x-api-key": api_key,
     }
-
-    # OAuth tokens start with sk-ant-oat, API keys with sk-ant-api
-    if api_key.startswith("sk-ant-oat"):
-        headers["Authorization"] = f"Bearer {api_key}"
-    else:
-        headers["x-api-key"] = api_key
 
     resp = req.post(
         "https://api.anthropic.com/v1/messages",

@@ -44,27 +44,20 @@ def run_setup():
     # ── Anthropic setup ─────────────────────────────────────────────────
     if provider == "anthropic":
         info("\nAnthropic API setup:")
-        info("  Option 1: Paste an API key (sk-ant-api03-...)")
-        info("  Option 2: Paste an OAuth token (sk-ant-oat01-...)")
-        info("            Run 'claude setup-token' to get your OAuth token\n")
+        info("  Paste your API key (sk-ant-api03-...)\n")
 
         current_key = config.get("anthropic_api_key", "")
         masked = _mask_key(current_key) if current_key else "not set"
 
         try:
-            key = input(f"[?] Anthropic API key/OAuth token [{masked}]: ").strip()
+            key = input(f"[?] Anthropic API key [{masked}]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             key = ""
 
         if key:
             config["anthropic_api_key"] = key
-            if key.startswith("sk-ant-oat"):
-                success("OAuth token saved.")
-            elif key.startswith("sk-ant-api"):
-                success("API key saved.")
-            else:
-                warning("Unrecognized key format, saved anyway.")
+            success("API key saved.")
         elif current_key:
             info("Keeping existing key.")
 

@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "xss-map"
+name = "xsshunter"
 version = "0.1.0"
-description = "Adaptive XSS scanner powered by AI/ML via Ollama"
+description = "XSSHUNTER — Adaptive XSS scanner powered by AI/ML"
 requires-python = ">=3.9"
 dependencies = [
     "requests>=2.31.0",
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-xss-map = "xss_map.cli:main"
+xsshunter = "xsshunter_ai.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["xss_map*"]
+include = ["xsshunter_ai*"]

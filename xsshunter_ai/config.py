@@ -1,11 +1,11 @@
-"""Config management — stores API keys and defaults in ~/.xss-map/config.json."""
+"""Config management — stores API keys and defaults in ~/.xsshunter/config.json."""
 
 import json
 import os
 from pathlib import Path
-from xss_map.utils import banner, info, success, warning, error, prompt_choice
+from xsshunter_ai.utils import banner, info, success, warning, error, prompt_choice
 
-CONFIG_DIR = Path.home() / ".xss-map"
+CONFIG_DIR = Path.home() / ".xsshunter"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
@@ -27,7 +27,7 @@ def save_config(config):
 def run_setup():
     """Interactive setup wizard."""
     banner()
-    info("xss-map setup")
+    info("xsshunter setup")
     info(f"Config will be saved to: {CONFIG_FILE}\n")
 
     config = load_config()

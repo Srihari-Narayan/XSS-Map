@@ -1,8 +1,8 @@
 """Injector — fires payloads into injection points and captures responses."""
 
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from xss_map.crawler import InjectionPoint
-from xss_map.utils import extract_snippet
+from xsshunter_ai.crawler import InjectionPoint
+from xsshunter_ai.utils import extract_snippet
 
 
 class InjectionResult:

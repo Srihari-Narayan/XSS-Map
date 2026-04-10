@@ -4,11 +4,11 @@ import json
 import os
 import random
 import requests as req
-from xss_map.analyzer import Analyzer
-from xss_map.crawler import crawl, display_injection_points, InjectionPoint
-from xss_map.injector import inject
-from xss_map.reporter import Reporter
-from xss_map.utils import (
+from xsshunter_ai.analyzer import Analyzer
+from xsshunter_ai.crawler import crawl, display_injection_points, InjectionPoint
+from xsshunter_ai.injector import inject
+from xsshunter_ai.reporter import Reporter
+from xsshunter_ai.utils import (
     RateLimiter,
     banner,
     critical,
@@ -71,7 +71,7 @@ def scan(args):
     payloads_file = args.payloads
     if not os.path.isfile(payloads_file):
         error(f"Tagged payloads file not found: {payloads_file}")
-        error("Run 'xss-map tag' first to classify your payloads.")
+        error("Run 'xsshunter tag' first to classify your payloads.")
         return
 
     info(f"Target URL: {args.url}")
@@ -117,7 +117,7 @@ def scan(args):
     points = [points[i] for i in selected_indices]
 
     # ── Resolve provider, model, and API key (CLI > env > config) ───────
-    from xss_map.config import load_config
+    from xsshunter_ai.config import load_config
     config = load_config()
 
     provider = args.provider or config.get("provider", "ollama")
@@ -133,7 +133,7 @@ def scan(args):
 
     if provider == "anthropic" and not api_key:
         error("Anthropic provider requires an API key or OAuth token.")
-        info("Tip: Run 'xss-map setup' to configure, or pass --api-key")
+        info("Tip: Run 'xsshunter setup' to configure, or pass --api-key")
         return
 
     info(f"AI provider: {provider} (model: {model})")
@@ -284,8 +284,8 @@ def scan(args):
     if reporter.findings:
         report_dir = args.output_dir or "reports"
         os.makedirs(report_dir, exist_ok=True)
-        reporter.save_json(os.path.join(report_dir, "xss_map_report.json"))
-        reporter.save_html(os.path.join(report_dir, "xss_map_report.html"))
+        reporter.save_json(os.path.join(report_dir, "xsshunter_report.json"))
+        reporter.save_html(os.path.join(report_dir, "xsshunter_report.html"))
 
     # Category stats
     stats = analyzer.get_category_stats()

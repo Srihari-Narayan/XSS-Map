@@ -2,8 +2,8 @@
 
 import json
 import requests as req
-from xss_map.utils import info, warning, call_ollama_chat, call_anthropic_chat
-from xss_map.tagger import CATEGORIES
+from xsshunter_ai.utils import info, warning, call_ollama_chat, call_anthropic_chat
+from xsshunter_ai.tagger import CATEGORIES
 
 RESULT_LABELS = ["reflected", "filtered", "blocked", "not_reflected"]
 

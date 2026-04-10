@@ -4,7 +4,7 @@ import json
 import html
 import os
 from datetime import datetime, timezone
-from xss_map.utils import success
+from xsshunter_ai.utils import success
 
 
 class Reporter:
@@ -30,7 +30,7 @@ class Reporter:
 
     def save_json(self, path):
         report = {
-            "tool": "xss-map",
+            "tool": "xsshunter",
             "version": "0.1.0",
             "target_url": self.target_url,
             "scan_start": self.start_time.isoformat(),
@@ -67,7 +67,7 @@ class Reporter:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>XSS-Map Report — {html.escape(self.target_url)}</title>
+<title>XSSHUNTER Report — {html.escape(self.target_url)}</title>
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{ font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; padding: 2rem; }}
@@ -92,7 +92,7 @@ class Reporter:
 </style>
 </head>
 <body>
-    <h1>XSS-Map Scan Report</h1>
+    <h1>XSSHUNTER Scan Report</h1>
     <p class="meta">
         Target: <strong>{html.escape(self.target_url)}</strong><br>
         Scan started: {self.start_time.strftime("%Y-%m-%d %H:%M:%S UTC")}<br>

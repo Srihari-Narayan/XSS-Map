@@ -3,7 +3,7 @@
 import json
 import os
 import re
-from xss_map.utils import info, success, error
+from xsshunter_ai.utils import info, success, error
 
 CATEGORIES = [
     "script_tag",

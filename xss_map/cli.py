@@ -123,6 +123,11 @@ def main():
         action="store_true",
         help="Non-interactive mode — skip all prompts during scan",
     )
+    tuning_group.add_argument(
+        "--generate",
+        action="store_true",
+        help="Enable AI payload generation — LLM crafts new payloads based on scan results each round",
+    )
 
     # Output
     output_group = scan_parser.add_argument_group("output")

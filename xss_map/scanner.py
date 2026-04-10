@@ -226,6 +226,39 @@ def scan(args):
             # ── Round summary ────────────────────────────────────────
             info(f"  Round {round_num} done: {round_reflected}/{round_total} reflected")
 
+            # ── AI payload generation (if enabled) ───────────────────
+            if args.generate and round_num >= 2 and len(analyzer.history) >= 5:
+                info(f"  Generating AI payloads based on round {round_num} results...")
+                ai_payloads = analyzer.generate_payloads(count=args.batch_size)
+                ai_payloads = [p for p in ai_payloads if p not in tested_payloads]
+
+                if ai_payloads:
+                    info(f"  Testing {len(ai_payloads)} AI-generated payload(s)...")
+                    for payload in ai_payloads:
+                        tested_payloads.add(payload)
+                        display_payload = truncate(payload, 70)
+
+                        result = inject(session, ip, payload, rate_limiter)
+                        if result is None:
+                            warning(f"  Request failed: {display_payload}")
+                            continue
+
+                        label = analyzer.classify(
+                            payload, result.response_body, result.status_code,
+                            category="ai_generated",
+                        )
+
+                        if label == "reflected":
+                            success(f"  [AI-GEN] REFLECTED  {display_payload}")
+                            confirmed_xss.append(result)
+                            reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
+                            xss_found_for_point = True
+                        elif label == "filtered":
+                            warning(f"  [AI-GEN] FILTERED   {display_payload}")
+                            reporter.add_finding(ip, payload, label, result.status_code, result.snippet)
+                        elif label == "blocked":
+                            error(f"  [AI-GEN] BLOCKED    {display_payload}")
+
             # ── Ask user after round if XSS found ────────────────────
             if xss_found_for_point and not args.batch:
                 if not prompt_yn("XSS found! Continue testing this injection point?", default=False):

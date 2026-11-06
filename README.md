@@ -195,7 +195,3 @@ Scans produce two report files in the output directory:
 
 This tool is intended for **authorized security testing only** — bug bounty programs, vulnerability disclosure programs (VDPs), and penetration tests with explicit written permission. Unauthorized use against systems you do not own or have permission to test is illegal. The authors are not responsible for misuse.
 
-## Authors
-
-- **Srihari N Narayan** — ML/AI integration, adaptive scanning engine, tool engineering
-- **Abhijeet Kumar** — XSS domain expertise, payload curation, security methodology

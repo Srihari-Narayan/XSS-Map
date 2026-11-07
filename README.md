@@ -1,10 +1,10 @@
 ```
-██╗  ██╗███████╗███████╗██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗
-╚██╗██╔╝██╔════╝██╔════╝██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗
- ╚███╔╝ ███████╗███████╗███████║██║   ██║██╔██╗ ██║   ██║   █████╗  ██████╔╝
- ██╔██╗ ╚════██║╚════██║██╔══██║██║   ██║██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗
-██╔╝ ██╗███████║███████║██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║
-╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+██╗  ██╗███████╗███████╗      ███╗   ███╗ █████╗ ██████╗
+╚██╗██╔╝██╔════╝██╔════╝      ████╗ ████║██╔══██╗██╔══██╗
+ ╚███╔╝ ███████╗███████╗█████╗██╔████╔██║███████║██████╔╝
+ ██╔██╗ ╚════██║╚════██║╚════╝██║╚██╔╝██║██╔══██║██╔═══╝
+██╔╝ ██╗███████║███████║      ██║ ╚═╝ ██║██║  ██║██║
+╚═╝  ╚═╝╚══════╝╚══════╝      ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝
 ```
 
 **Adaptive XSS scanner powered by AI/ML.** Uses LLMs to intelligently select payload categories and generate new payloads at runtime based on how the target responds.
@@ -70,7 +70,7 @@ Get an API key from [console.anthropic.com](https://console.anthropic.com), then
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # Or run the setup wizard
-xsshunter setup
+xss-map setup
 ```
 
 ### 2. Tag your payloads
@@ -78,7 +78,7 @@ xsshunter setup
 Place your payloads file as `payloads.txt` in the project root, then:
 
 ```bash
-xsshunter tag
+xss-map tag
 ```
 
 This classifies all payloads into 13 categories using regex pattern matching (instant, no LLM needed). Output: `payloads_tagged.json`.
@@ -87,48 +87,48 @@ This classifies all payloads into 13 categories using regex pattern matching (in
 
 ```bash
 # Basic scan (Ollama, interactive)
-xsshunter scan "http://target.com/page?q=test"
+xss-map scan "http://target.com/page?q=test"
 
 # With Anthropic
-xsshunter scan "http://target.com" --provider anthropic
+xss-map scan "http://target.com" --provider anthropic
 
 # Non-interactive with AI payload generation
-xsshunter scan "http://target.com" --batch --generate
+xss-map scan "http://target.com" --batch --generate
 
 # With authentication
-xsshunter scan "http://target.com" -c "session=abc123" --bearer "eyJhbG..."
+xss-map scan "http://target.com" -c "session=abc123" --bearer "eyJhbG..."
 
 # Specify parameters manually
-xsshunter scan "http://target.com" -p username -p email -m POST
+xss-map scan "http://target.com" -p username -p email -m POST
 ```
 
 ## Commands
 
-### `xsshunter setup`
+### `xss-map setup`
 
-Interactive wizard to configure your default LLM provider and API key. Saves to `~/.xsshunter/config.json`.
+Interactive wizard to configure your default LLM provider and API key. Saves to `~/.xss-map/config.json`.
 
 ```bash
-xsshunter setup
+xss-map setup
 ```
 
-### `xsshunter tag`
+### `xss-map tag`
 
 Classify payloads into categories using regex patterns.
 
 ```bash
-xsshunter tag                           # default: payloads.txt -> payloads_tagged.json
-xsshunter tag -f my_payloads.txt -o tagged.json
+xss-map tag                           # default: payloads.txt -> payloads_tagged.json
+xss-map tag -f my_payloads.txt -o tagged.json
 ```
 
 **Categories:** script_tag, event_handler, encoded, svg_tag, img_tag, iframe_tag, javascript_uri, style_injection, template_injection, polyglot, dom_manipulation, tag_breakout, other
 
-### `xsshunter scan`
+### `xss-map scan`
 
 Run an adaptive XSS scan.
 
 ```
-xsshunter scan <url> [options]
+xss-map scan <url> [options]
 ```
 
 **LLM options:**
@@ -182,14 +182,14 @@ The LLM is called **once per round** for strategy (not per-payload). Per-payload
 
 ## Configuration Priority
 
-CLI flags > Environment variables > `~/.xsshunter/config.json` > Defaults
+CLI flags > Environment variables > `~/.xss-map/config.json` > Defaults
 
 ## Reports
 
 Scans produce two report files in the output directory:
 
-- `xsshunter_report.json` — machine-readable JSON with all findings
-- `xsshunter_report.html` — dark-themed HTML report with status badges and collapsible response snippets
+- `xss_map_report.json` — machine-readable JSON with all findings
+- `xss_map_report.html` — dark-themed HTML report with status badges and collapsible response snippets
 
 ## Disclaimer
 

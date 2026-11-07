@@ -2,7 +2,7 @@
 
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from bs4 import BeautifulSoup
-from xsshunter_ai.utils import info, success, warning
+from xss_map.utils import info, success, warning
 
 
 class InjectionPoint:

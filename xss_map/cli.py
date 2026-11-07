@@ -1,4 +1,4 @@
-"""CLI entry point for xsshunter."""
+"""CLI entry point for xss-map."""
 
 import argparse
 import sys
@@ -6,8 +6,8 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="xsshunter",
-        description="XSSHUNTER — Adaptive XSS scanner powered by AI/ML",
+        prog="xss-map",
+        description="XSS-Map — Adaptive XSS scanner powered by AI/ML",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -138,7 +138,7 @@ def main():
     # ── setup subcommand ──────────────────────────────────────────────────
     subparsers.add_parser(
         "setup",
-        help="Configure API keys and default provider for xsshunter",
+        help="Configure API keys and default provider for xss-map",
     )
 
     # ── Parse and dispatch ───────────────────────────────────────────────
@@ -149,18 +149,18 @@ def main():
         sys.exit(1)
 
     if args.command == "tag":
-        from xsshunter_ai.tagger import tag_payloads
-        from xsshunter_ai.utils import banner
+        from xss_map.tagger import tag_payloads
+        from xss_map.utils import banner
         banner()
         ok = tag_payloads(args.file, args.output)
         sys.exit(0 if ok else 1)
 
     elif args.command == "setup":
-        from xsshunter_ai.config import run_setup
+        from xss_map.config import run_setup
         run_setup()
 
     elif args.command == "scan":
-        from xsshunter_ai.scanner import scan
+        from xss_map.scanner import scan
         scan(args)
 
 

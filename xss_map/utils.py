@@ -101,24 +101,30 @@ def prompt_select(question, items, allow_all=True, already_displayed=False):
 # ── Rate limiter ─────────────────────────────────────────────────────────────
 
 class RateLimiter:
-    """Token-bucket rate limiter."""
+    """Global rate limiter, safe for concurrent workers.
+
+    Reserves evenly-spaced time slots under a lock, then sleeps *outside*
+    the lock so many threads can be in flight at once while the aggregate
+    request rate stays capped at ``requests_per_second``.
+    """
 
     def __init__(self, requests_per_second):
         self.rps = requests_per_second
         self.min_interval = 1.0 / requests_per_second if requests_per_second > 0 else 0
         self._lock = threading.Lock()
-        self._last_request = 0.0
+        self._next_slot = 0.0
 
     def wait(self):
-        """Block until the next request is allowed."""
+        """Block until this request's reserved slot is due."""
         if self.min_interval == 0:
             return
         with self._lock:
             now = time.monotonic()
-            elapsed = now - self._last_request
-            if elapsed < self.min_interval:
-                time.sleep(self.min_interval - elapsed)
-            self._last_request = time.monotonic()
+            slot = max(now, self._next_slot)
+            self._next_slot = slot + self.min_interval
+        delay = slot - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
 
 
 # ── Misc helpers ─────────────────────────────────────────────────────────────

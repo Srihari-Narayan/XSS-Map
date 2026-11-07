@@ -3,7 +3,9 @@
 import json
 import os
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests as req
+from requests.adapters import HTTPAdapter
 from xss_map.analyzer import Analyzer
 from xss_map.crawler import crawl, display_injection_points, InjectionPoint
 from xss_map.injector import inject
@@ -33,9 +35,14 @@ def _load_tagged_payloads(path):
     return by_category
 
 
-def _build_session(cookies, headers, bearer_token):
-    """Build a requests.Session with auth configured."""
+def _build_session(cookies, headers, bearer_token, pool_size=10):
+    """Build a requests.Session with auth configured and a pool sized for concurrency."""
     session = req.Session()
+    # Size the connection pool so concurrent workers reuse keep-alive sockets
+    # instead of churning new connections (and emitting pool-full warnings).
+    adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
     if cookies:
         for cookie_str in cookies:
             if "=" in cookie_str:
@@ -63,6 +70,33 @@ def _pick_payloads(payloads_by_cat, category, max_payloads):
     return random.sample(pool, max_payloads)
 
 
+def _fire_batch(session, ip, payloads, rate_limiter, concurrency):
+    """Inject a batch of payloads concurrently.
+
+    Returns results in the SAME order as ``payloads``. Each request still
+    passes through the shared rate limiter, so concurrency raises throughput
+    without exceeding the configured aggregate request rate. Classification
+    is intentionally left to the caller so it runs single-threaded.
+    """
+    results = [None] * len(payloads)
+    if not payloads:
+        return results
+
+    workers = max(1, min(concurrency, len(payloads)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        future_to_idx = {
+            pool.submit(inject, session, ip, payload, rate_limiter): idx
+            for idx, payload in enumerate(payloads)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                results[idx] = future.result()
+            except Exception:
+                results[idx] = None
+    return results
+
+
 def scan(args):
     """Run the adaptive XSS scan."""
     banner()
@@ -82,8 +116,11 @@ def scan(args):
         return
 
     # ── Build session ────────────────────────────────────────────────────
-    session = _build_session(args.cookie, args.header, args.bearer)
+    concurrency = max(1, getattr(args, "concurrency", 1))
+    session = _build_session(args.cookie, args.header, args.bearer, pool_size=concurrency)
     rate_limiter = RateLimiter(args.rate_limit)
+    if concurrency > 1:
+        info(f"Concurrency: up to {concurrency} parallel request(s), capped at {args.rate_limit} req/s")
 
     # ── Load payloads ────────────────────────────────────────────────────
     payloads_by_cat = _load_tagged_payloads(payloads_file)
@@ -190,16 +227,19 @@ def scan(args):
                 warning("No untested payloads left for this strategy. Moving on.")
                 break
 
-            # ── Fire batch (all heuristic, fast) ─────────────────────
+            # ── Fire batch concurrently (classification stays single-threaded) ─
             round_reflected = 0
             round_total = 0
 
             for payload in batch:
                 tested_payloads.add(payload)
+
+            batch_results = _fire_batch(session, ip, batch, rate_limiter, concurrency)
+
+            for payload, result in zip(batch, batch_results):
                 display_payload = truncate(payload, 70)
                 round_total += 1
 
-                result = inject(session, ip, payload, rate_limiter)
                 if result is None:
                     warning(f"  Request failed: {display_payload}")
                     continue
@@ -236,9 +276,12 @@ def scan(args):
                     info(f"  Testing {len(ai_payloads)} AI-generated payload(s)...")
                     for payload in ai_payloads:
                         tested_payloads.add(payload)
+
+                    ai_results = _fire_batch(session, ip, ai_payloads, rate_limiter, concurrency)
+
+                    for payload, result in zip(ai_payloads, ai_results):
                         display_payload = truncate(payload, 70)
 
-                        result = inject(session, ip, payload, rate_limiter)
                         if result is None:
                             warning(f"  Request failed: {display_payload}")
                             continue

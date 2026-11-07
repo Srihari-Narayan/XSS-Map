@@ -111,6 +111,13 @@ def main():
         help="Payloads per round per injection point (default: 10)",
     )
     tuning_group.add_argument(
+        "--concurrency",
+        type=int,
+        default=10,
+        help="Max payloads fired in parallel per round (default: 10). "
+             "The global --rate-limit still caps the aggregate request rate.",
+    )
+    tuning_group.add_argument(
         "--max-rounds",
         type=int,
         default=10,

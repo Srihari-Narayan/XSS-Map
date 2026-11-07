@@ -19,7 +19,8 @@
 - **Regex-based payload tagging** — categorizes payloads into 13 categories without needing an LLM
 - **Single-page crawling** — auto-discovers query params, form fields, and header injection points
 - **Authentication support** — cookies, bearer tokens, custom headers
-- **Rate limiting** — configurable token-bucket rate limiter (default 10 req/s)
+- **Concurrent scanning** — payloads in a round fire in parallel (thread pool) for a large wall-clock speedup on latent targets
+- **Rate limiting** — configurable global rate limiter (default 10 req/s), enforced across all concurrent workers
 - **JSON + HTML reports** — dark-themed HTML report with collapsible details
 - **Interactive or batch mode** — sqlmap-style prompts, or `--batch` for CI/automation
 - **Multi-provider LLM** — Ollama (local) or Anthropic API (cloud)
@@ -145,6 +146,7 @@ xss-map scan <url> [options]
 | Flag | Description |
 |------|-------------|
 | `--batch-size` | Payloads per round (default: 10) |
+| `--concurrency` | Max payloads fired in parallel per round (default: 10). The global `--rate-limit` still caps the aggregate request rate. |
 | `--max-rounds` | Max rounds per injection point (default: 10) |
 | `--rate-limit` | Max requests/second (default: 10) |
 | `--batch` | Non-interactive mode, skip all prompts |
